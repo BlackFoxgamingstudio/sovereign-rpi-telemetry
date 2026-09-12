@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sovereign-rpi-telemetry"
+version = "1.0.0"
+description = "Zero-dependency embedded Linux telemetry daemon for Raspberry Pi."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Russell Alan Powers", email = "russell@sovereignbizbox.io"}]
+
+[project.scripts]
+sovereign-rpi-telemetry = "src.cli:main"

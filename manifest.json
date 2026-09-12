@@ -1,0 +1,39 @@
+{
+  "id": "sol-001-iot-telemetry-daemon",
+  "slug": "raspberry-pi-telemetry-daemon",
+  "name": "Raspberry Pi Edge Telemetry Daemon & Hardware Monitor",
+  "version": "1.0.0",
+  "domain": "IoT & Edge Systems",
+  "language": "Python",
+  "author": "Russell Alan Powers",
+  "sme_role_target": "Staff IoT & Edge Systems Architect",
+  "source_repo": "/Users/russellpowers/rashbarrypi",
+  "entrypoint": "python3 src/cli.py --poll",
+  "status": "PRODUCTION_READY",
+  "description": "Production-grade edge telemetry daemon for Raspberry Pi and IoT gateways. Gathers real-time CPU thermals, memory metrics, GPIO pin states, sensor payloads, and hardware health, dispatching structured alerts and telemetry to local databases and n8n automation pipelines.",
+  "interfaces": {
+    "cli": "python3 src/cli.py",
+    "http_adapter": "python3 n8n/webhook_adapter.py --port 8770",
+    "n8n_workflow": "n8n/workflow.json"
+  },
+  "functions": [
+    {
+      "id": "fn-001-poll-telemetry",
+      "name": "poll_telemetry",
+      "description": "Collects a comprehensive telemetry snapshot from edge sensors and hardware controllers.",
+      "signature": "poll_telemetry(simulate: bool = False, thermal_spike: bool = False) -> Dict[str, Any]",
+      "cli_command": "python3 src/cli.py --poll"
+    },
+    {
+      "id": "fn-002-evaluate-health",
+      "name": "evaluate_health",
+      "description": "Evaluates telemetry snapshot against SLA safety thresholds, returning operational health classification and triggered alert payloads.",
+      "signature": "evaluate_health(telemetry: Dict[str, Any]) -> Dict[str, Any]",
+      "cli_command": "python3 src/cli.py --health"
+    }
+  ],
+  "requirements": {
+    "python": ">=3.9",
+    "dependencies": []
+  }
+}

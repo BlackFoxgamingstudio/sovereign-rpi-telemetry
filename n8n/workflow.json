@@ -1,0 +1,171 @@
+{
+  "name": "SBB Solution 01: Raspberry Pi IoT Telemetry & Alert Dispatcher",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "rpi-schedule-trigger",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rpi-telemetry",
+        "options": {}
+      },
+      "id": "rpi-webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 480],
+      "webhookId": "rpi-telemetry-hook"
+    },
+    {
+      "parameters": {
+        "command": "python3 \"/Users/russellpowers/Sovereign Biz Box/solutions/raspberry-pi-telemetry-daemon/src/cli.py\" --poll --format json"
+      },
+      "id": "rpi-cli-poll",
+      "name": "Execute Telemetry CLI",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [480, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse CLI JSON output and evaluate thresholds\nconst rawOutput = $input.first().json.stdout;\nconst telemetry = JSON.parse(rawOutput);\n\nconst hw = telemetry.hardware;\nconst alerts = [];\n\nif (hw.cpu_temp_celsius >= 82.0) {\n  alerts.push({\n    severity: 'CRITICAL',\n    code: 'ERR_THERMAL_RUNAWAY',\n    message: `Critical CPU Temp: ${hw.cpu_temp_celsius}°C`\n  });\n} else if (hw.cpu_temp_celsius >= 72.0) {\n  alerts.push({\n    severity: 'WARNING',\n    code: 'WARN_THERMAL_ELEVATED',\n    message: `Elevated CPU Temp: ${hw.cpu_temp_celsius}°C`\n  });\n}\n\nif (hw.ram_usage_percent >= 92.0) {\n  alerts.push({\n    severity: 'CRITICAL',\n    code: 'ERR_OOM_RISK',\n    message: `RAM usage critical: ${hw.ram_usage_percent}%`\n  });\n}\n\nreturn [{\n  json: {\n    node_id: telemetry.node_id,\n    timestamp: telemetry.timestamp,\n    status: alerts.some(a => a.severity === 'CRITICAL') ? 'CRITICAL' : (alerts.length > 0 ? 'WARNING' : 'OPTIMAL'),\n    alerts: alerts,\n    hardware_summary: {\n      temp_c: hw.cpu_temp_celsius,\n      cpu_pct: hw.cpu_usage_percent,\n      ram_pct: hw.ram_usage_percent,\n      disk_free_gb: hw.disk_free_gb\n    },\n    telemetry_raw: telemetry\n  }\n}];"
+      },
+      "id": "rpi-evaluate-health",
+      "name": "Evaluate Health & Alerts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 380]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.status}}",
+              "operation": "notEqual",
+              "value2": "OPTIMAL"
+            }
+          ]
+        }
+      },
+      "id": "rpi-if-alert",
+      "name": "Has Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [920, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8766/api/webhook/audit",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event_type\": \"iot_hardware_incident\",\n  \"source\": \"sol-001-iot-telemetry-daemon\",\n  \"payload\": {\n    \"status\": \"{{$json.status}}\",\n    \"alerts\": {{$json.alerts}},\n    \"hardware\": {{$json.hardware_summary}}\n  }\n}",
+        "options": {}
+      },
+      "id": "rpi-dispatch-incident",
+      "name": "Dispatch Incident to Telemetry DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1160, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8766/api/webhook/audit",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event_type\": \"iot_telemetry_heartbeat\",\n  \"source\": \"sol-001-iot-telemetry-daemon\",\n  \"payload\": {\n    \"status\": \"OPTIMAL\",\n    \"hardware\": {{$json.hardware_summary}}\n  }\n}",
+        "options": {}
+      },
+      "id": "rpi-dispatch-heartbeat",
+      "name": "Log Optimal Heartbeat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1160, 480]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Execute Telemetry CLI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Execute Telemetry CLI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Telemetry CLI": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Health & Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Health & Alerts": {
+      "main": [
+        [
+          {
+            "node": "Has Alerts?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Alerts?": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Incident to Telemetry DB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Optimal Heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
