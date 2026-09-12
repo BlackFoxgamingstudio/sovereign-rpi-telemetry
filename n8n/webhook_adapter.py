@@ -282,6 +282,14 @@ class TelemetryWebhookHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({"error": f"Endpoint not found: {path}"}).encode("utf-8"))
 
     def do_POST(self):
+        auth_header = self.headers.get("X-SBB-Auth")
+        if auth_header != os.environ.get("SBB_SHARED_SECRET", "sbb_local_dev_secret_2026"):
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"error": "Unauthorized"}')
+            return
+
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/")
 
