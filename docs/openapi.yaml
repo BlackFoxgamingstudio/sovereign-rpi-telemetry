@@ -1,0 +1,87 @@
+openapi: "3.1.0"
+info:
+  title: "RPi Telemetry API"
+  description: "API for RPi Telemetry"
+  version: "1.0.0"
+  contact:
+    name: Russell Alan Powers
+    email: russell@blackfoxgaming.com
+  license:
+    name: MIT
+servers:
+  - url: "http://localhost:8770"
+    description: Local development
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: healthy}
+                  service: {type: string}
+                  port: {type: integer}
+  /api/v1/execute:
+    post:
+      summary: Execute a solution action
+      operationId: executeAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteRequest'
+      responses:
+        "200":
+          description: Action executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecuteResponse'
+        "400":
+          description: Invalid request
+        "401":
+          description: Invalid API key
+      security:
+        - ApiKeyAuth: []
+components:
+  schemas:
+    ExecuteRequest:
+      type: object
+      required: [action, payload]
+      properties:
+        action:
+          type: string
+          description: The operation to execute
+          example: health_ping
+        payload:
+          type: object
+          description: Operation-specific parameters
+        trace_id:
+          type: string
+          description: Optional correlation ID
+          format: uuid
+    ExecuteResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+        data:
+          type: object
+        trace_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-SBB-API-Key

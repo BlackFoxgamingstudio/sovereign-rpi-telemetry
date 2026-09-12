@@ -1,0 +1,18 @@
+meta {
+  name: Execute Action
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:8770/api/v1/execute
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "action": "health_ping",
+    "payload": {}
+  }
+}
