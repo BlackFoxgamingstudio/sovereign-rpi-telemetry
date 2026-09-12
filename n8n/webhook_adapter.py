@@ -23,7 +23,15 @@ from src.core import (
     poll_telemetry,
     evaluate_health,
     telemetry_to_dict,
-    health_to_dict
+    health_to_dict,
+    poll_sysfs_thermal,
+    read_proc_load,
+    query_i2c_sensors,
+    evaluate_sla_anomalies,
+    process_ir_vision,
+    classify_gestures,
+    bundle_crash_dump,
+    dispatch_telemetry_webhook
 )
 
 PORT = int(os.environ.get("SBB_RPI_PORT", 8770))
@@ -74,6 +82,33 @@ OPENAPI_SPEC = {
                     }
                 }
             }
+        },
+        "/api/v1/tools": {
+            "get": {"summary": "List All 8 Discrete Micro-Tools", "responses": {"200": {"description": "Tool catalog"}}}
+        },
+        "/api/v1/tools/poll_sysfs_thermal": {
+            "post": {"summary": "FEAT-001-01: Sysfs CPU Thermal Zone Poller", "responses": {"200": {"description": "Thermal metrics"}}}
+        },
+        "/api/v1/tools/read_proc_load": {
+            "post": {"summary": "FEAT-001-02: POSIX Load Average & Memory Pressure Reader", "responses": {"200": {"description": "Host load metrics"}}}
+        },
+        "/api/v1/tools/query_i2c_sensors": {
+            "post": {"summary": "FEAT-001-03: I2C/GPIO Edge Sensor Reader", "responses": {"200": {"description": "Sensor payload"}}}
+        },
+        "/api/v1/tools/evaluate_sla_anomalies": {
+            "post": {"summary": "FEAT-001-04: Multi-Level SLA Threshold Anomaly Evaluator", "responses": {"200": {"description": "Anomaly assessment"}}}
+        },
+        "/api/v1/tools/process_ir_vision": {
+            "post": {"summary": "FEAT-001-05: IR Blob & Computer Vision Tracking Processor", "responses": {"200": {"description": "Vision tracking coordinates"}}}
+        },
+        "/api/v1/tools/classify_gestures": {
+            "post": {"summary": "FEAT-001-06: Gesture Event Classifier", "responses": {"200": {"description": "Classified gesture"}}}
+        },
+        "/api/v1/tools/bundle_crash_dump": {
+            "post": {"summary": "FEAT-001-07: Hardware Diagnostics & Crash Dump Bundler", "responses": {"200": {"description": "Crash bundle metadata"}}}
+        },
+        "/api/v1/tools/dispatch_telemetry_webhook": {
+            "post": {"summary": "FEAT-001-08: Telemetry Webhook & Alert Dispatcher", "responses": {"200": {"description": "Dispatch confirmation"}}}
         },
         "/telemetry/simulate": {
             "post": {
@@ -167,6 +202,17 @@ class TelemetryWebhookHandler(BaseHTTPRequestHandler):
             self.wfile.write(SWAGGER_UI_HTML.encode("utf-8"))
             return
 
+        if path == "/api/v1/tools":
+            self._set_headers(200)
+            self.wfile.write(json.dumps({
+                "tools": [
+                    "poll_sysfs_thermal", "read_proc_load", "query_i2c_sensors",
+                    "evaluate_sla_anomalies", "process_ir_vision", "classify_gestures",
+                    "bundle_crash_dump", "dispatch_telemetry_webhook"
+                ]
+            }).encode("utf-8"))
+            return
+
         if path == "/telemetry/poll":
             snapshot = poll_telemetry(simulate=False)
             self._set_headers(200)
@@ -186,6 +232,50 @@ class TelemetryWebhookHandler(BaseHTTPRequestHandler):
                     "ram_usage": snapshot.hardware.ram_usage_percent
                 }
             }, indent=2).encode("utf-8"))
+            return
+
+        # Granular Micro-Function Tool Endpoints
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_len) if content_len > 0 else b"{}"
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except Exception:
+            payload = {}
+
+        if path == "/api/v1/tools/poll_sysfs_thermal":
+            self._set_headers(200)
+            self.wfile.write(json.dumps(poll_sysfs_thermal(), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/read_proc_load":
+            self._set_headers(200)
+            self.wfile.write(json.dumps(read_proc_load(), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/query_i2c_sensors":
+            self._set_headers(200)
+            self.wfile.write(json.dumps(query_i2c_sensors(), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/evaluate_sla_anomalies":
+            self._set_headers(200)
+            self.wfile.write(json.dumps(evaluate_sla_anomalies(), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/process_ir_vision":
+            self._set_headers(200)
+            self.wfile.write(json.dumps(process_ir_vision(payload), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/classify_gestures":
+            stream = payload.get("event_stream", [])
+            self._set_headers(200)
+            self.wfile.write(json.dumps(classify_gestures(stream), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/bundle_crash_dump":
+            out = payload.get("output_path", "/tmp/sbb_diagnostics.tar.gz")
+            self._set_headers(200)
+            self.wfile.write(json.dumps(bundle_crash_dump(out), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/dispatch_telemetry_webhook":
+            tgt = payload.get("target_endpoint", "http://127.0.0.1:8766/api/webhook/audit")
+            self._set_headers(200)
+            self.wfile.write(json.dumps(dispatch_telemetry_webhook(payload, tgt), indent=2).encode("utf-8"))
             return
 
         self._set_headers(404)
@@ -212,6 +302,50 @@ class TelemetryWebhookHandler(BaseHTTPRequestHandler):
                 "telemetry": telemetry_to_dict(snapshot),
                 "health": health_to_dict(health)
             }, indent=2).encode("utf-8"))
+            return
+
+        # Granular Micro-Function Tool Endpoints
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_len) if content_len > 0 else b"{}"
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except Exception:
+            payload = {}
+
+        if path == "/api/v1/tools/poll_sysfs_thermal":
+            self._set_headers(200)
+            self.wfile.write(json.dumps(poll_sysfs_thermal(), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/read_proc_load":
+            self._set_headers(200)
+            self.wfile.write(json.dumps(read_proc_load(), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/query_i2c_sensors":
+            self._set_headers(200)
+            self.wfile.write(json.dumps(query_i2c_sensors(), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/evaluate_sla_anomalies":
+            self._set_headers(200)
+            self.wfile.write(json.dumps(evaluate_sla_anomalies(), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/process_ir_vision":
+            self._set_headers(200)
+            self.wfile.write(json.dumps(process_ir_vision(payload), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/classify_gestures":
+            stream = payload.get("event_stream", [])
+            self._set_headers(200)
+            self.wfile.write(json.dumps(classify_gestures(stream), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/bundle_crash_dump":
+            out = payload.get("output_path", "/tmp/sbb_diagnostics.tar.gz")
+            self._set_headers(200)
+            self.wfile.write(json.dumps(bundle_crash_dump(out), indent=2).encode("utf-8"))
+            return
+        elif path == "/api/v1/tools/dispatch_telemetry_webhook":
+            tgt = payload.get("target_endpoint", "http://127.0.0.1:8766/api/webhook/audit")
+            self._set_headers(200)
+            self.wfile.write(json.dumps(dispatch_telemetry_webhook(payload, tgt), indent=2).encode("utf-8"))
             return
 
         self._set_headers(404)

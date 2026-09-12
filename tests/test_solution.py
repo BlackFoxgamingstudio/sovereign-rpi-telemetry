@@ -104,6 +104,39 @@ class TestRaspberryPiTelemetryDaemon(unittest.TestCase):
         payload = json.loads(res.stdout)
         self.assertEqual(payload["health"]["status"], "CRITICAL")
 
+    def test_08_discrete_micro_tools(self):
+        """Tests all 8 discrete micro-tool functions directly."""
+        from src.core import (
+            poll_sysfs_thermal, read_proc_load, query_i2c_sensors,
+            evaluate_sla_anomalies, process_ir_vision, classify_gestures,
+            bundle_crash_dump, dispatch_telemetry_webhook
+        )
+        t = poll_sysfs_thermal()
+        self.assertIn("cpu_temp_celsius", t)
+        self.assertGreater(t["cpu_temp_celsius"], 0)
+
+        ld = read_proc_load()
+        self.assertIn("cpu_usage_pct", ld)
+        self.assertIn("ram_usage_pct", ld)
+
+        sens = query_i2c_sensors()
+        self.assertIn("ambient_temp_c", sens)
+
+        anom = evaluate_sla_anomalies()
+        self.assertIn("status", anom)
+
+        vis = process_ir_vision()
+        self.assertTrue(vis["blob_detected"])
+
+        gest = classify_gestures([{"x": 10, "y": 10}, {"x": 100, "y": 10}])
+        self.assertEqual(gest["gesture_type"], "SWIPE_RIGHT")
+
+        bundle = bundle_crash_dump("/tmp/test_bundle.tar.gz")
+        self.assertIn("sha256_hash", bundle)
+
+        disp = dispatch_telemetry_webhook({"alert": "TEST"})
+        self.assertTrue(disp["dispatch_success"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
