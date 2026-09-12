@@ -1,0 +1,27 @@
+# Template: Standalone Microservice & n8n Ecosystem for Solution 01
+version: '3.8'
+
+services:
+  sbb-rpi-telemetry:
+    image: ghcr.io/blackfoxgamingstudio/sovereign-rpi-telemetry:latest
+    container_name: sbb-rpi-telemetry
+    restart: unless-stopped
+    ports:
+      - "${SBB_RPI_PORT:-8770}:8770"
+    environment:
+      - SBB_RPI_PORT=8770
+      - SBB_NODE_ID=${SBB_NODE_ID:-edge-sensor-01}
+      - SBB_IOT_TEMP_CRITICAL_C=${SBB_IOT_TEMP_CRITICAL_C:-82.0}
+      - SBB_IOT_RAM_CRITICAL_PCT=${SBB_IOT_RAM_CRITICAL_PCT:-92.0}
+    volumes:
+      - /sys:/sys:ro
+      - /proc:/proc:ro
+
+  sbb-vault-bridge:
+    image: ghcr.io/blackfoxgamingstudio/sovereign-vault-bridge:latest
+    container_name: sbb-vault-bridge
+    restart: unless-stopped
+    ports:
+      - "${SBB_VAULT_PORT:-8766}:8766"
+    volumes:
+      - ./data/telemetry.db:/data/telemetry.db

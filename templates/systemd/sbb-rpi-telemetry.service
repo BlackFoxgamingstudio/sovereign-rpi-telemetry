@@ -1,0 +1,22 @@
+[Unit]
+Description=Sovereign Biz Box: Raspberry Pi Telemetry & Alert Daemon
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/sovereign-biz-box/solutions/raspberry-pi-telemetry-daemon
+EnvironmentFile=/etc/default/sbb-rpi-telemetry
+ExecStart=/usr/bin/python3 /opt/sovereign-biz-box/solutions/raspberry-pi-telemetry-daemon/n8n/webhook_adapter.py
+Restart=always
+RestartSec=5s
+
+# Security hardening
+ProtectSystem=full
+ProtectHome=read-only
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

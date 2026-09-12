@@ -1,0 +1,64 @@
+{
+  "name": "TEMPLATE: SBB Solution 01 - Raspberry Pi IoT Telemetry",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# Template: SBB Solution 01 IoT Telemetry\nImport this template into any n8n instance.\nConfigure variables in `Settings > Variables`:\n- `SBB_VAULT_BRIDGE_URL`\n- `SBB_N8N_BASE_URL`\n- `SBB_IOT_TEMP_CRITICAL_C`\n- `SBB_IOT_RAM_CRITICAL_PCT`",
+        "height": 180,
+        "width": 500,
+        "color": 4
+      },
+      "id": "template-header-note",
+      "name": "Template Instructions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 60]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rpi-telemetry",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "template-webhook-trigger",
+      "name": "Webhook Inbound Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "template-rpi-telemetry-hook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($vars && $vars.SBB_VAULT_BRIDGE_URL ? $vars.SBB_VAULT_BRIDGE_URL : 'http://127.0.0.1:8766') + '/api/webhook/audit' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.audit_event) }}",
+        "options": {}
+      },
+      "id": "template-dispatch-vault",
+      "name": "Dispatch Audit to Vault Bridge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [560, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Inbound Trigger": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Audit to Vault Bridge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  sbb-rpi-telemetry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sbb-rpi-telemetry
+    restart: unless-stopped
+    ports:
+      - "8770:8770"
+    environment:
+      - SBB_RPI_PORT=8770
+      - SBB_NODE_ID=docker-edge-node-01
+      - SBB_ENVIRONMENT=production
+      - SBB_IOT_TEMP_CRITICAL_C=82.0
+      - SBB_IOT_RAM_CRITICAL_PCT=92.0
+    volumes:
+      - /sys:/sys:ro
+      - /proc:/proc:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8770/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

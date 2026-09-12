@@ -3,6 +3,45 @@
   "nodes": [
     {
       "parameters": {
+        "content": "## SBB Solution 01: Raspberry Pi IoT Telemetry & Alert Dispatcher\n**Package ID**: `PKG-001` | **Domain**: IoT Edge Infrastructure\n\n### Data Flow & Lifecycle:\n1. **Triggers**: Runs every 5 minutes on schedule, or receives live push events via webhook.\n2. **Metrics Collection**: Polls hardware sensors (CPU Temp, RAM %, Disk %) via sysfs/CLI.\n3. **Evaluation**: Compares sensor vitals against dynamically configured threshold variables.\n4. **Audit Logging**: Dispatches heartbeat or hardware incident to SBB Vault REST Bridge.\n5. **Autonomous Cascade**: If hardware anomaly detected, triggers Solution 02 Avatar SRE.",
+        "height": 210,
+        "width": 640,
+        "color": 4
+      },
+      "id": "sticky-arch-overview",
+      "name": "Architecture Overview Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 40]
+    },
+    {
+      "parameters": {
+        "content": "## Platform Variables Matrix ($vars)\nThis workflow reads dynamic environment variables configured in n8n Variables:\n- `$vars.SBB_VAULT_BRIDGE_URL`: `http://127.0.0.1:8766`\n- `$vars.SBB_N8N_BASE_URL`: `http://127.0.0.1:5678`\n- `$vars.SBB_IOT_TEMP_CRITICAL_C`: `82.0`\n- `$vars.SBB_IOT_TEMP_WARNING_C`: `72.0`\n- `$vars.SBB_IOT_RAM_CRITICAL_PCT`: `92.0`\n\n*All nodes contain resilient defaults if variables are uninitialized.*",
+        "height": 210,
+        "width": 550,
+        "color": 5
+      },
+      "id": "sticky-vars-reference",
+      "name": "Variables Reference Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [880, 40]
+    },
+    {
+      "parameters": {
+        "content": "## Autonomous Escalation Bridge\n**Target**: Solution 02 (`sovereign-avatar-agents`)\n**Endpoint**: `POST {{ $vars.SBB_N8N_BASE_URL }}/webhook/avatar-agents`\n\nWhen a CPU thermal trip (>82°C) or OOM risk (>92% RAM) occurs, this node routes the telemetry payload to `SentinelSRE` for closed-loop kernel mitigation.",
+        "height": 180,
+        "width": 550,
+        "color": 7
+      },
+      "id": "sticky-escalation-note",
+      "name": "Escalation Bridge Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [880, 640]
+    },
+    {
+      "parameters": {
         "rule": {
           "interval": [
             {
@@ -44,7 +83,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nlet telemetry;\n\nif (item.stdout) {\n  try {\n    telemetry = JSON.parse(item.stdout);\n  } catch(e) {\n    telemetry = {};\n  }\n} else if (item.body && item.body.hardware) {\n  telemetry = item.body;\n} else if (item.hardware) {\n  telemetry = item;\n} else if (item.body && item.body.simulate) {\n  const isSpike = item.body.thermal_spike === true;\n  telemetry = {\n    node_id: 'sbb-edge-simulated-01',\n    timestamp: new Date().toISOString(),\n    hardware: {\n      cpu_temp_celsius: isSpike ? 85.5 : 48.0,\n      cpu_usage_percent: isSpike ? 92.0 : 25.0,\n      ram_usage_percent: isSpike ? 93.0 : 38.0,\n      disk_free_gb: 14.2\n    }\n  };\n} else if (item.body && item.body.thermal_spike) {\n  telemetry = {\n    node_id: 'sbb-edge-thermal-spike-01',\n    timestamp: new Date().toISOString(),\n    hardware: {\n      cpu_temp_celsius: 86.4,\n      cpu_usage_percent: 95.0,\n      ram_usage_percent: 94.2,\n      disk_free_gb: 12.1\n    }\n  };\n} else {\n  telemetry = {\n    node_id: 'sbb-edge-darwin-daemon',\n    timestamp: new Date().toISOString(),\n    hardware: {\n      cpu_temp_celsius: 47.5,\n      cpu_usage_percent: 18.2,\n      ram_usage_percent: 42.0,\n      disk_free_gb: 13.8\n    }\n  };\n}\n\nconst hw = telemetry.hardware || {};\nconst alerts = [];\n\nif ((hw.cpu_temp_celsius || 0) >= 82.0) {\n  alerts.push({\n    severity: 'CRITICAL',\n    code: 'ERR_THERMAL_RUNAWAY',\n    message: `Critical CPU Temp: ${hw.cpu_temp_celsius}°C (Threshold: 82°C)`\n  });\n} else if ((hw.cpu_temp_celsius || 0) >= 72.0) {\n  alerts.push({\n    severity: 'WARNING',\n    code: 'WARN_THERMAL_ELEVATED',\n    message: `Elevated CPU Temp: ${hw.cpu_temp_celsius}°C`\n  });\n}\n\nif ((hw.ram_usage_percent || 0) >= 92.0) {\n  alerts.push({\n    severity: 'CRITICAL',\n    code: 'ERR_OOM_RISK',\n    message: `RAM usage critical: ${hw.ram_usage_percent}%`\n  });\n}\n\nconst status = alerts.some(a => a.severity === 'CRITICAL') ? 'CRITICAL' : (alerts.length > 0 ? 'WARNING' : 'OPTIMAL');\n\nconst audit_event = {\n  event_type: status === 'OPTIMAL' ? 'iot_telemetry_heartbeat' : 'iot_hardware_incident',\n  source: 'sol-001-iot-telemetry-daemon',\n  payload: {\n    status: status,\n    alert_count: alerts.length,\n    alerts: alerts,\n    hardware: {\n      temp_c: hw.cpu_temp_celsius,\n      cpu_pct: hw.cpu_usage_percent,\n      ram_pct: hw.ram_usage_percent,\n      disk_free_gb: hw.disk_free_gb\n    }\n  }\n};\n\nreturn [{\n  json: {\n    node_id: telemetry.node_id || 'sbb-edge-01',\n    timestamp: telemetry.timestamp || new Date().toISOString(),\n    status: status,\n    alert_count: alerts.length,\n    alerts: alerts,\n    hardware_summary: audit_event.payload.hardware,\n    audit_event: audit_event,\n    action_taken: status === 'OPTIMAL' ? 'heartbeat_logged' : 'incident_dispatched',\n    is_anomaly: status !== 'OPTIMAL'\n  }\n}];"
+        "jsCode": "const item = $input.first().json;\nlet telemetry;\n\nif (item.stdout) {\n  try {\n    telemetry = JSON.parse(item.stdout);\n  } catch(e) {\n    telemetry = {};\n  }\n} else if (item.body && item.body.hardware) {\n  telemetry = item.body;\n} else if (item.hardware) {\n  telemetry = item;\n} else if (item.body && item.body.simulate) {\n  const isSpike = item.body.thermal_spike === true;\n  telemetry = {\n    node_id: 'sbb-edge-simulated-01',\n    timestamp: new Date().toISOString(),\n    hardware: {\n      cpu_temp_celsius: isSpike ? 85.5 : 48.0,\n      cpu_usage_percent: isSpike ? 92.0 : 25.0,\n      ram_usage_percent: isSpike ? 93.0 : 38.0,\n      disk_free_gb: 14.2\n    }\n  };\n} else if (item.body && item.body.thermal_spike) {\n  telemetry = {\n    node_id: 'sbb-edge-thermal-spike-01',\n    timestamp: new Date().toISOString(),\n    hardware: {\n      cpu_temp_celsius: 86.4,\n      cpu_usage_percent: 95.0,\n      ram_usage_percent: 94.2,\n      disk_free_gb: 12.1\n    }\n  };\n} else {\n  telemetry = {\n    node_id: 'sbb-edge-darwin-daemon',\n    timestamp: new Date().toISOString(),\n    hardware: {\n      cpu_temp_celsius: 47.5,\n      cpu_usage_percent: 18.2,\n      ram_usage_percent: 42.0,\n      disk_free_gb: 13.8\n    }\n  };\n}\n\n// Resolve dynamic platform threshold variables\nconst tempCritical = (typeof $vars !== 'undefined' && $vars.SBB_IOT_TEMP_CRITICAL_C) ? parseFloat($vars.SBB_IOT_TEMP_CRITICAL_C) : 82.0;\nconst tempWarning = (typeof $vars !== 'undefined' && $vars.SBB_IOT_TEMP_WARNING_C) ? parseFloat($vars.SBB_IOT_TEMP_WARNING_C) : 72.0;\nconst ramCritical = (typeof $vars !== 'undefined' && $vars.SBB_IOT_RAM_CRITICAL_PCT) ? parseFloat($vars.SBB_IOT_RAM_CRITICAL_PCT) : 92.0;\n\nconst hw = telemetry.hardware || {};\nconst alerts = [];\n\nif ((hw.cpu_temp_celsius || 0) >= tempCritical) {\n  alerts.push({\n    severity: 'CRITICAL',\n    code: 'ERR_THERMAL_RUNAWAY',\n    message: `Critical CPU Temp: ${hw.cpu_temp_celsius}°C (Threshold: ${tempCritical}°C)`\n  });\n} else if ((hw.cpu_temp_celsius || 0) >= tempWarning) {\n  alerts.push({\n    severity: 'WARNING',\n    code: 'WARN_THERMAL_ELEVATED',\n    message: `Elevated CPU Temp: ${hw.cpu_temp_celsius}°C`\n  });\n}\n\nif ((hw.ram_usage_percent || 0) >= ramCritical) {\n  alerts.push({\n    severity: 'CRITICAL',\n    code: 'ERR_OOM_RISK',\n    message: `RAM usage critical: ${hw.ram_usage_percent}% (Threshold: ${ramCritical}%)`\n  });\n}\n\nconst status = alerts.some(a => a.severity === 'CRITICAL') ? 'CRITICAL' : (alerts.length > 0 ? 'WARNING' : 'OPTIMAL');\n\nconst audit_event = {\n  event_type: status === 'OPTIMAL' ? 'iot_telemetry_heartbeat' : 'iot_hardware_incident',\n  source: 'sol-001-iot-telemetry-daemon',\n  payload: {\n    status: status,\n    alert_count: alerts.length,\n    alerts: alerts,\n    hardware: {\n      temp_c: hw.cpu_temp_celsius,\n      cpu_pct: hw.cpu_usage_percent,\n      ram_pct: hw.ram_usage_percent,\n      disk_free_gb: hw.disk_free_gb\n    }\n  }\n};\n\nreturn [{\n  json: {\n    node_id: telemetry.node_id || 'sbb-edge-01',\n    timestamp: telemetry.timestamp || new Date().toISOString(),\n    status: status,\n    alert_count: alerts.length,\n    alerts: alerts,\n    hardware_summary: audit_event.payload.hardware,\n    audit_event: audit_event,\n    action_taken: status === 'OPTIMAL' ? 'heartbeat_logged' : 'incident_dispatched',\n    is_anomaly: status !== 'OPTIMAL'\n  }\n}];"
       },
       "id": "rpi-evaluate-health",
       "name": "Evaluate Health & Alerts",
@@ -55,7 +94,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:8766/api/webhook/audit",
+        "url": "={{ ($vars && $vars.SBB_VAULT_BRIDGE_URL ? $vars.SBB_VAULT_BRIDGE_URL : 'http://127.0.0.1:8766') + '/api/webhook/audit' }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.audit_event) }}",
@@ -87,7 +126,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:5678/webhook/avatar-agents",
+        "url": "={{ ($vars && $vars.SBB_N8N_BASE_URL ? $vars.SBB_N8N_BASE_URL : 'http://127.0.0.1:5678') + '/webhook/avatar-agents' }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ \"node_id\": $json.node_id, \"timestamp\": $json.timestamp, \"status\": $json.status, \"alerts\": $json.alerts, \"hardware\": $json.hardware_summary }) }}",
@@ -97,7 +136,7 @@
       "name": "Dispatch to Avatar SRE Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1200, 460]
+      "position": [1200, 480]
     }
   ],
   "connections": {
