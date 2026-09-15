@@ -1,17 +1,20 @@
-# Changelog
+# Changelog — Rpi Telemetry
 
-All notable changes to `sovereign-rpi-telemetry` will be documented in this file.
+All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+Versioning follows [Semantic Versioning](https://semver.org/).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [Unreleased] — v1.1.0 (Domain Business Logic Engine)
+### In Progress
+- Extracting and packaging granular component algorithms defined in docs/ARCHITECTURE.md.
+- Connecting ChromaDB vector indexing and specialized domain pipelines.
 
-## [1.0.0] - 2026-09-12
-
+## [1.0.0] — 2026-09-11 (Production DevOps & Automation Foundation)
 ### Added
-- Zero-dependency Linux sysfs hardware telemetry collector (`cpu_temp`, `cpu_usage`, `ram_usage`, `disk_free`).
-- Deterministic thermal runaway evaluation with dual trip thresholds (72.0°C warning, 82.0°C critical).
-- Microservice webhook adapter on port 8770 with interactive Swagger UI (`/docs`) and OpenAPI 3.1 schema (`/openapi.json`).
-- Automated incident escalation bridge into n8n and Solution 02 (`sovereign-avatar-agents`).
-- Complete test suite with 100% pass rate under `pytest` and pure Python.
-- GitHub Actions CI/CD matrix supporting Python 3.10–3.12 across Ubuntu and macOS.
-- Multi-stage Dockerfile and Docker Compose templates for cloud and edge deployment.
+- Multi-stage Dockerfile with non-root security context and health check.
+- GitHub Actions CI matrix testing across Python 3.10, 3.11, and 3.12.
+- Zero-Trust REST Webhook Adapter listening on port `8000` with `X-SBB-Auth` header validation.
+- OpenAPI 3.1 interactive Swagger documentation (`/docs` and `/openapi.json`).
+- Full n8n workflow canvas integration connecting Webhook ➔ HTTP Microservice ➔ Respond to Webhook.
+- Architecture specification (`docs/ARCHITECTURE.md`), Developer Guide, SME Playbook, and SOP.
+- Standardized CLI invocation harness in `src/cli.py`.
+- Foundation CoreEngine with deterministic SHA-256 idempotency hashing.
